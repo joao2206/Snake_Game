@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Import necessário para LogicalKeyboardKey
+import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math';
 
 void main() {
   runApp(const SnakeGame());
@@ -24,9 +25,13 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  List<Offset> snake = [const Offset(0, 0)];
+  final int gridSize = 20;
+  List<Offset> snake = [Offset(10, 10)];
   String direction = 'right';
   Timer? gameLoop;
+  Offset food = Offset(15, 15);
+  bool isGameOver = false;
+  int score = 0;
 
   @override
   void initState() {
@@ -44,6 +49,8 @@ class _GameScreenState extends State<GameScreen> {
     gameLoop = Timer.periodic(const Duration(milliseconds: 200), (timer) {
       setState(() {
         moveSnake();
+        checkCollision();
+        checkFood();
       });
     });
   }
@@ -67,13 +74,86 @@ class _GameScreenState extends State<GameScreen> {
         newHead = head + const Offset(1, 0);
     }
 
+    snake.add(newHead);
+    snake.removeAt(0);
+  }
+
+  void checkFood() {
+    final head = snake.last;
+    if (head == food) {
+      score += 1;
+      snake.add(snake.last);
+      generateFood();
+    }
+  }
+
+  void generateFood() {
+    final random = Random();
+    Offset newFood;
+    do {
+      newFood = Offset(
+        random.nextInt(gridSize).toDouble(),
+        random.nextInt(gridSize).toDouble(),
+      );
+    } while (snake.contains(newFood));
+    food = newFood;
+  }
+
+  void checkCollision() {
+    final head = snake.last;
+
+    if (head.dx < 0 ||
+        head.dx >= gridSize ||
+        head.dy < 0 ||
+        head.dy >= gridSize) {
+      endGame();
+    }
+
+    for (int i = 0; i < snake.length - 1; i++) {
+      if (snake[i] == head) {
+        endGame();
+        break;
+      }
+    }
+  }
+
+  void endGame() {
+    gameLoop?.cancel();
     setState(() {
-      snake.add(newHead);
-      snake.removeAt(0);
+      isGameOver = true;
     });
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Game Over'),
+        content: Text('Sua pontuação: $score'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              restartGame();
+            },
+            child: const Text('Reiniciar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void restartGame() {
+    setState(() {
+      snake = [Offset(10, 10)];
+      direction = 'right';
+      score = 0;
+      isGameOver = false;
+      generateFood();
+    });
+    startGame();
   }
 
   void handleKeyPress(LogicalKeyboardKey key) {
+    if (isGameOver) return;
+
     if (key == LogicalKeyboardKey.arrowUp && direction != 'down') {
       direction = 'up';
     } else if (key == LogicalKeyboardKey.arrowDown && direction != 'up') {
@@ -89,6 +169,22 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Jogo da Cobrinha'),
+        backgroundColor: Colors.black,
+        elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Center(
+              child: Text(
+                'Pontuação: $score',
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Focus(
         autofocus: true,
         onKey: (FocusNode node, RawKeyEvent event) {
@@ -100,24 +196,35 @@ class _GameScreenState extends State<GameScreen> {
         child: Center(
           child: AspectRatio(
             aspectRatio: 1,
-            child: GridView.builder(
-              itemCount: 20 * 20,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 20,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white),
               ),
-              itemBuilder: (BuildContext context, int index) {
-                final x = index % 20;
-                final y = index ~/ 20;
-                final isSnake =
-                    snake.contains(Offset(x.toDouble(), y.toDouble()));
-                return Container(
-                  margin: const EdgeInsets.all(1),
-                  decoration: BoxDecoration(
-                    color: isSnake ? Colors.green : Colors.grey[800],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                );
-              },
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: gridSize * gridSize,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: gridSize,
+                ),
+                itemBuilder: (BuildContext context, int index) {
+                  final x = index % gridSize;
+                  final y = index ~/ gridSize;
+                  final position = Offset(x.toDouble(), y.toDouble());
+                  final isSnake = snake.contains(position);
+                  final isFood = position == food;
+                  return Container(
+                    margin: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: isSnake
+                          ? Colors.green
+                          : isFood
+                              ? Colors.red
+                              : Colors.grey[800],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ),
