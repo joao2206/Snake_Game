@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math';
-import 'package:shared_preferences/shared_preferences.dart'; // Importa shared_preferences
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const SnakeGame());
@@ -20,6 +20,20 @@ class SnakeGame extends StatelessWidget {
   }
 }
 
+class Level {
+  final int levelNumber;
+  final Duration speed;
+  final int foodCount;
+  final int obstacleCount;
+
+  Level({
+    required this.levelNumber,
+    required this.speed,
+    required this.foodCount,
+    required this.obstacleCount,
+  });
+}
+
 class GameScreen extends StatefulWidget {
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -30,16 +44,36 @@ class _GameScreenState extends State<GameScreen> {
   List<Offset> snake = [Offset(10, 10)];
   String direction = 'right';
   Timer? gameLoop;
-  Offset food = Offset(15, 15);
+  List<Offset> foods = [];
+  List<Offset> obstacles = [];
   bool isGameOver = false;
   int score = 0;
-  int highScore = 0; // Variável para armazenar o recorde
+  int highScore = 0;
+  int currentLevelIndex = 0;
+
+  List<Level> levels = [
+    Level(
+        levelNumber: 1,
+        speed: Duration(milliseconds: 300),
+        foodCount: 1,
+        obstacleCount: 0),
+    Level(
+        levelNumber: 2,
+        speed: Duration(milliseconds: 250),
+        foodCount: 2,
+        obstacleCount: 5),
+    Level(
+        levelNumber: 3,
+        speed: Duration(milliseconds: 200),
+        foodCount: 3,
+        obstacleCount: 10),
+  ];
 
   @override
   void initState() {
     super.initState();
-    loadHighScore(); // Carrega o recorde ao iniciar
-    startGame();
+    loadHighScore();
+    initializeLevel();
   }
 
   @override
@@ -48,7 +82,6 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  // Função para carregar o recorde armazenado
   Future<void> loadHighScore() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -56,18 +89,22 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
-  // Função para salvar o novo recorde
   Future<void> saveHighScore() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setInt('highScore', highScore);
   }
 
-  void startGame() {
-    gameLoop = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+  void initializeLevel() {
+    final currentLevel = levels[currentLevelIndex];
+    generateObstacles(currentLevel.obstacleCount);
+    generateFoods(currentLevel.foodCount);
+    gameLoop?.cancel();
+    gameLoop = Timer.periodic(currentLevel.speed, (timer) {
       setState(() {
         moveSnake();
         checkCollision();
         checkFood();
+        checkLevelUp();
       });
     });
   }
@@ -97,50 +134,105 @@ class _GameScreenState extends State<GameScreen> {
 
   void checkFood() {
     final head = snake.last;
-    if (head == food) {
-      // Aumenta a pontuação
-      score += 1;
-      // Adiciona uma nova parte à cobrinha (não remove a última posição)
-      snake.add(snake.last);
-      // Gera uma nova comida
-      generateFood();
-      // Verifica se o novo score é maior que o recorde
-      if (score > highScore) {
-        highScore = score;
-        saveHighScore(); // Salva o novo recorde
-      }
+    if (foods.contains(head)) {
+      setState(() {
+        foods.remove(head);
+        score += 1;
+        snake.add(snake.last);
+        final currentLevel = levels[currentLevelIndex];
+        generateFoods(1);
+        if (score > highScore) {
+          highScore = score;
+          saveHighScore();
+        }
+      });
     }
   }
 
-  void generateFood() {
+  void generateFoods(int count) {
     final random = Random();
-    Offset newFood;
-    do {
-      newFood = Offset(
-        random.nextInt(gridSize).toDouble(),
-        random.nextInt(gridSize).toDouble(),
-      );
-    } while (snake.contains(newFood));
-    food = newFood;
+    for (int i = 0; i < count; i++) {
+      Offset newFood;
+      do {
+        newFood = Offset(
+          random.nextInt(gridSize).toDouble(),
+          random.nextInt(gridSize).toDouble(),
+        );
+      } while (snake.contains(newFood) ||
+          foods.contains(newFood) ||
+          obstacles.contains(newFood));
+      foods.add(newFood);
+    }
+  }
+
+  void generateObstacles(int count) {
+    final random = Random();
+    obstacles.clear();
+    for (int i = 0; i < count; i++) {
+      Offset newObstacle;
+      do {
+        newObstacle = Offset(
+          random.nextInt(gridSize).toDouble(),
+          random.nextInt(gridSize).toDouble(),
+        );
+      } while (snake.contains(newObstacle) ||
+          foods.contains(newObstacle) ||
+          obstacles.contains(newObstacle));
+      obstacles.add(newObstacle);
+    }
   }
 
   void checkCollision() {
     final head = snake.last;
 
-    // Verifica colisão com as paredes
     if (head.dx < 0 ||
         head.dx >= gridSize ||
         head.dy < 0 ||
         head.dy >= gridSize) {
       endGame();
+      return;
     }
 
-    // Verifica colisão consigo mesma
     for (int i = 0; i < snake.length - 1; i++) {
       if (snake[i] == head) {
         endGame();
-        break;
+        return;
       }
+    }
+
+    if (obstacles.contains(head)) {
+      endGame();
+      return;
+    }
+  }
+
+  void checkLevelUp() {
+    int levelUpScore = (currentLevelIndex + 1) * 5;
+    if (score >= levelUpScore && currentLevelIndex < levels.length - 1) {
+      gameLoop?.cancel();
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Nível Up!'),
+          content: Text(
+            'Você avançou para o nível ${levels[currentLevelIndex + 1].levelNumber}!',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  currentLevelIndex += 1;
+                  initializeLevel();
+                });
+              },
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -151,7 +243,7 @@ class _GameScreenState extends State<GameScreen> {
     });
     showDialog(
       context: context,
-      barrierDismissible: false, // Impede fechar o diálogo tocando fora
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: const Text('Game Over'),
         content: Column(
@@ -159,6 +251,7 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             Text('Sua pontuação: $score'),
             Text('Recorde: $highScore'),
+            Text('Nível alcançado: ${levels[currentLevelIndex].levelNumber}'),
           ],
         ),
         actions: [
@@ -180,15 +273,16 @@ class _GameScreenState extends State<GameScreen> {
       direction = 'right';
       score = 0;
       isGameOver = false;
-      generateFood();
+      currentLevelIndex = 0;
+      obstacles.clear();
+      foods.clear();
+      initializeLevel();
     });
-    startGame();
   }
 
   void handleKeyPress(LogicalKeyboardKey key) {
     if (isGameOver) return;
 
-    // Impede que a cobrinha mude para a direção oposta diretamente
     if (key == LogicalKeyboardKey.arrowUp && direction != 'down') {
       direction = 'up';
     } else if (key == LogicalKeyboardKey.arrowDown && direction != 'up') {
@@ -223,6 +317,10 @@ class _GameScreenState extends State<GameScreen> {
                     'Recorde: $highScore',
                     style: const TextStyle(color: Colors.yellow, fontSize: 14),
                   ),
+                  Text(
+                    'Nível: ${levels[currentLevelIndex].levelNumber}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
                 ],
               ),
             ),
@@ -255,7 +353,8 @@ class _GameScreenState extends State<GameScreen> {
                   final y = index ~/ gridSize;
                   final position = Offset(x.toDouble(), y.toDouble());
                   final isSnake = snake.contains(position);
-                  final isFood = position == food;
+                  final isFood = foods.contains(position);
+                  final isObstacle = obstacles.contains(position);
                   return Container(
                     margin: const EdgeInsets.all(1),
                     decoration: BoxDecoration(
@@ -263,7 +362,9 @@ class _GameScreenState extends State<GameScreen> {
                           ? Colors.green
                           : isFood
                               ? Colors.red
-                              : Colors.grey[800],
+                              : isObstacle
+                                  ? Colors.grey
+                                  : Colors.grey[800],
                       borderRadius: BorderRadius.circular(4),
                     ),
                   );
