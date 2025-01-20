@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart'; // Importa shared_preferences
 
 void main() {
   runApp(const SnakeGame());
@@ -32,10 +33,12 @@ class _GameScreenState extends State<GameScreen> {
   Offset food = Offset(15, 15);
   bool isGameOver = false;
   int score = 0;
+  int highScore = 0; // Variável para armazenar o recorde
 
   @override
   void initState() {
     super.initState();
+    loadHighScore(); // Carrega o recorde ao iniciar
     startGame();
   }
 
@@ -43,6 +46,20 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     gameLoop?.cancel();
     super.dispose();
+  }
+
+  // Função para carregar o recorde armazenado
+  Future<void> loadHighScore() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      highScore = prefs.getInt('highScore') ?? 0;
+    });
+  }
+
+  // Função para salvar o novo recorde
+  Future<void> saveHighScore() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('highScore', highScore);
   }
 
   void startGame() {
@@ -81,9 +98,17 @@ class _GameScreenState extends State<GameScreen> {
   void checkFood() {
     final head = snake.last;
     if (head == food) {
+      // Aumenta a pontuação
       score += 1;
+      // Adiciona uma nova parte à cobrinha (não remove a última posição)
       snake.add(snake.last);
+      // Gera uma nova comida
       generateFood();
+      // Verifica se o novo score é maior que o recorde
+      if (score > highScore) {
+        highScore = score;
+        saveHighScore(); // Salva o novo recorde
+      }
     }
   }
 
@@ -102,6 +127,7 @@ class _GameScreenState extends State<GameScreen> {
   void checkCollision() {
     final head = snake.last;
 
+    // Verifica colisão com as paredes
     if (head.dx < 0 ||
         head.dx >= gridSize ||
         head.dy < 0 ||
@@ -109,6 +135,7 @@ class _GameScreenState extends State<GameScreen> {
       endGame();
     }
 
+    // Verifica colisão consigo mesma
     for (int i = 0; i < snake.length - 1; i++) {
       if (snake[i] == head) {
         endGame();
@@ -124,9 +151,16 @@ class _GameScreenState extends State<GameScreen> {
     });
     showDialog(
       context: context,
+      barrierDismissible: false, // Impede fechar o diálogo tocando fora
       builder: (_) => AlertDialog(
         title: const Text('Game Over'),
-        content: Text('Sua pontuação: $score'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Sua pontuação: $score'),
+            Text('Recorde: $highScore'),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -154,6 +188,7 @@ class _GameScreenState extends State<GameScreen> {
   void handleKeyPress(LogicalKeyboardKey key) {
     if (isGameOver) return;
 
+    // Impede que a cobrinha mude para a direção oposta diretamente
     if (key == LogicalKeyboardKey.arrowUp && direction != 'down') {
       direction = 'up';
     } else if (key == LogicalKeyboardKey.arrowDown && direction != 'up') {
@@ -175,11 +210,20 @@ class _GameScreenState extends State<GameScreen> {
         elevation: 0,
         actions: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Center(
-              child: Text(
-                'Pontuação: $score',
-                style: const TextStyle(color: Colors.white, fontSize: 18),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Pontuação: $score',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  Text(
+                    'Recorde: $highScore',
+                    style: const TextStyle(color: Colors.yellow, fontSize: 14),
+                  ),
+                ],
               ),
             ),
           ),
