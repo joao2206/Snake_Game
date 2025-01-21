@@ -1,16 +1,26 @@
 # snake_game
 
-A new Flutter project.
+Este é o projeto para primeira avaliação de TSI no caso um jogo da cobrinha desenvolvido com Flutter. O jogo apresenta mecânicas clássicas com inovações, como power-ups, níveis com desafios progressivos, durante o desenvolvimento exploramos os conceitos apresentados em sala.
 
-## Getting Started
+## Tecnologias Utilizadas
 
-This project is a starting point for a Flutter application.
+- **Flutter:** Framework para desenvolvimento de aplicações móveis nativas.
+- **Dart:** Linguagem de programação utilizada pelo Flutter.
 
-A few resources to get you started if this is your first Flutter project:
+  ## Como Executar o Projeto
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+1. **Pré-requisitos:**
+   - [Flutter](https://flutter.dev/) instalado em sua máquina.
+   - Um editor de código (VSCode, Android Studio, etc.) configurado para Flutter.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+2. **Clone o repositório:**
+
+   ```bash
+   git clone [https://github.com/seu-usuario/nome-do-repositorio.git](https://github.com/joao2206/Snake_Game.git)
+   cd snake_game
+
+3. Instale as dependências:
+   - flutter pub get
+     
+4. Execute o projeto:
+   - flutter run
