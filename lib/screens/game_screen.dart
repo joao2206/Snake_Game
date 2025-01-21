@@ -38,37 +38,37 @@ class _GameScreenState extends State<GameScreen> {
   final List<Level> levels = [
     Level(
       levelNumber: 1,
-      speed: const Duration(milliseconds: 400),
+      speed: const Duration(milliseconds: 300),
       foodCount: 1,
       obstacleCount: 0,
     ),
     Level(
       levelNumber: 2,
-      speed: const Duration(milliseconds: 350),
+      speed: const Duration(milliseconds: 330),
       foodCount: 2,
       obstacleCount: 5,
     ),
     Level(
       levelNumber: 3,
-      speed: const Duration(milliseconds: 300),
+      speed: const Duration(milliseconds: 350),
       foodCount: 3,
       obstacleCount: 10,
     ),
     Level(
       levelNumber: 4,
-      speed: const Duration(milliseconds: 250),
+      speed: const Duration(milliseconds: 350),
       foodCount: 1,
       obstacleCount: 15,
     ),
     Level(
       levelNumber: 5,
-      speed: const Duration(milliseconds: 200),
+      speed: const Duration(milliseconds: 400),
       foodCount: 2,
       obstacleCount: 20,
     ),
     Level(
       levelNumber: 6,
-      speed: const Duration(milliseconds: 150),
+      speed: const Duration(milliseconds: 400),
       foodCount: 3,
       obstacleCount: 25,
     ),
@@ -298,30 +298,25 @@ class _GameScreenState extends State<GameScreen> {
     int levelUpScore = (currentLevelIndex + 1) * 5;
     if (score >= levelUpScore && currentLevelIndex < levels.length - 1) {
       gameLoop?.cancel();
+
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          title: const Text('Nível Up!'),
+          title: const Text('NEXT LEVEL!'),
           content: Text(
-              'Você avançou para o nível ${levels[currentLevelIndex + 1].levelNumber}!'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  currentLevelIndex += 1;
-                  foods.clear();
-                  obstacles.clear();
-                  powerUps.clear();
-                  initializeLevel();
-                });
-              },
-              child: const Text('Continuar'),
-            ),
-          ],
+            'Você avançou para o nível ${levels[currentLevelIndex + 1].levelNumber}!',
+          ),
         ),
       );
+
+      Future.delayed(const Duration(seconds: 1), () {
+        Navigator.of(context).pop();
+        setState(() {
+          currentLevelIndex += 1;
+          initializeLevel();
+        });
+      });
     }
   }
 
