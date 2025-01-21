@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.0.15
+  collection: ^1.16.0
 
 dev_dependencies:
   flutter_test:

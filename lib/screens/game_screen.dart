@@ -4,6 +4,16 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/level.dart';
+import 'package:collection/collection.dart';
+
+enum PowerUpType { aceleracao, desaceleracao, pontuacaoExtra, tamanhoReduzido }
+
+class PowerUp {
+  final Offset position;
+  final PowerUpType type;
+
+  PowerUp({required this.position, required this.type});
+}
 
 class GameScreen extends StatefulWidget {
   const GameScreen({Key? key}) : super(key: key);
@@ -19,6 +29,7 @@ class _GameScreenState extends State<GameScreen> {
   Timer? gameLoop;
   List<Offset> foods = [];
   List<Offset> obstacles = [];
+  List<PowerUp> powerUps = [];
   bool isGameOver = false;
   int score = 0;
   int highScore = 0;
@@ -27,21 +38,39 @@ class _GameScreenState extends State<GameScreen> {
   final List<Level> levels = [
     Level(
       levelNumber: 1,
-      speed: const Duration(milliseconds: 300),
+      speed: const Duration(milliseconds: 400),
       foodCount: 1,
       obstacleCount: 0,
     ),
     Level(
       levelNumber: 2,
-      speed: const Duration(milliseconds: 250),
+      speed: const Duration(milliseconds: 350),
       foodCount: 2,
       obstacleCount: 5,
     ),
     Level(
       levelNumber: 3,
-      speed: const Duration(milliseconds: 200),
+      speed: const Duration(milliseconds: 300),
       foodCount: 3,
       obstacleCount: 10,
+    ),
+    Level(
+      levelNumber: 4,
+      speed: const Duration(milliseconds: 250),
+      foodCount: 1,
+      obstacleCount: 15,
+    ),
+    Level(
+      levelNumber: 5,
+      speed: const Duration(milliseconds: 200),
+      foodCount: 2,
+      obstacleCount: 20,
+    ),
+    Level(
+      levelNumber: 6,
+      speed: const Duration(milliseconds: 150),
+      foodCount: 3,
+      obstacleCount: 25,
     ),
   ];
 
@@ -72,14 +101,16 @@ class _GameScreenState extends State<GameScreen> {
 
   void initializeLevel() {
     final currentLevel = levels[currentLevelIndex];
-    generateObstacles(currentLevel.obstacleCount);
     generateFoods(currentLevel.foodCount);
+    generateObstacles(currentLevel.obstacleCount);
+    generatePowerUps(1);
     gameLoop?.cancel();
     gameLoop = Timer.periodic(currentLevel.speed, (timer) {
       setState(() {
         moveSnake();
         checkCollision();
         checkFood();
+        checkPowerUps();
         checkLevelUp();
       });
     });
@@ -116,7 +147,6 @@ class _GameScreenState extends State<GameScreen> {
         score += 1;
         snake.add(snake.last);
         generateFoods(1);
-
         if (score > highScore) {
           highScore = score;
           saveHighScore();
@@ -136,7 +166,8 @@ class _GameScreenState extends State<GameScreen> {
         );
       } while (snake.contains(newFood) ||
           foods.contains(newFood) ||
-          obstacles.contains(newFood));
+          obstacles.contains(newFood) ||
+          powerUps.any((p) => p.position == newFood));
       foods.add(newFood);
     }
   }
@@ -153,9 +184,90 @@ class _GameScreenState extends State<GameScreen> {
         );
       } while (snake.contains(newObstacle) ||
           foods.contains(newObstacle) ||
-          obstacles.contains(newObstacle));
+          obstacles.contains(newObstacle) ||
+          powerUps.any((p) => p.position == newObstacle));
       obstacles.add(newObstacle);
     }
+  }
+
+  void generatePowerUps(int count) {
+    final random = Random();
+    for (int i = 0; i < count; i++) {
+      Offset newPowerUp;
+      do {
+        newPowerUp = Offset(
+          random.nextInt(gridSize).toDouble(),
+          random.nextInt(gridSize).toDouble(),
+        );
+      } while (snake.contains(newPowerUp) ||
+          foods.contains(newPowerUp) ||
+          obstacles.contains(newPowerUp) ||
+          powerUps.any((p) => p.position == newPowerUp));
+
+      PowerUpType type =
+          PowerUpType.values[random.nextInt(PowerUpType.values.length)];
+      powerUps.add(PowerUp(position: newPowerUp, type: type));
+    }
+  }
+
+  void checkPowerUps() {
+    final head = snake.last;
+    final index = powerUps.indexWhere((p) => p.position == head);
+    if (index != -1) {
+      final powerUp = powerUps.removeAt(index);
+      applyPowerUp(powerUp);
+    }
+  }
+
+  void applyPowerUp(PowerUp powerUp) {
+    switch (powerUp.type) {
+      case PowerUpType.aceleracao:
+        final oldSpeed = levels[currentLevelIndex].speed;
+        changeGameSpeed(
+            Duration(milliseconds: (oldSpeed.inMilliseconds * 0.7).toInt()));
+        Future.delayed(const Duration(seconds: 5), () {
+          changeGameSpeed(oldSpeed);
+        });
+        break;
+      case PowerUpType.desaceleracao:
+        final oldSpeed = levels[currentLevelIndex].speed;
+        changeGameSpeed(
+            Duration(milliseconds: (oldSpeed.inMilliseconds * 1.3).toInt()));
+        Future.delayed(const Duration(seconds: 5), () {
+          changeGameSpeed(oldSpeed);
+        });
+        break;
+      case PowerUpType.pontuacaoExtra:
+        setState(() {
+          score += 5;
+          if (score > highScore) {
+            highScore = score;
+            saveHighScore();
+          }
+        });
+        break;
+      case PowerUpType.tamanhoReduzido:
+        setState(() {
+          if (snake.length > 3) {
+            snake.removeRange(0, snake.length ~/ 2);
+          }
+        });
+        break;
+    }
+  }
+
+  void changeGameSpeed(Duration newSpeed) {
+    final currentLevel = levels[currentLevelIndex];
+    gameLoop?.cancel();
+    gameLoop = Timer.periodic(newSpeed, (timer) {
+      setState(() {
+        moveSnake();
+        checkCollision();
+        checkFood();
+        checkPowerUps();
+        checkLevelUp();
+      });
+    });
   }
 
   void checkCollision() {
@@ -192,14 +304,16 @@ class _GameScreenState extends State<GameScreen> {
         builder: (_) => AlertDialog(
           title: const Text('Nível Up!'),
           content: Text(
-            'Você avançou para o nível ${levels[currentLevelIndex + 1].levelNumber}!',
-          ),
+              'Você avançou para o nível ${levels[currentLevelIndex + 1].levelNumber}!'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 setState(() {
                   currentLevelIndex += 1;
+                  foods.clear();
+                  obstacles.clear();
+                  powerUps.clear();
                   initializeLevel();
                 });
               },
@@ -249,15 +363,15 @@ class _GameScreenState extends State<GameScreen> {
       score = 0;
       isGameOver = false;
       currentLevelIndex = 0;
-      obstacles.clear();
       foods.clear();
+      obstacles.clear();
+      powerUps.clear();
       initializeLevel();
     });
   }
 
   void handleKeyPress(LogicalKeyboardKey key) {
     if (isGameOver) return;
-
     if (key == LogicalKeyboardKey.arrowUp && direction != 'down') {
       direction = 'up';
     } else if (key == LogicalKeyboardKey.arrowDown && direction != 'up') {
@@ -284,18 +398,15 @@ class _GameScreenState extends State<GameScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Pontuação: $score',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  Text(
-                    'Recorde: $highScore',
-                    style: const TextStyle(color: Colors.yellow, fontSize: 14),
-                  ),
-                  Text(
-                    'Nível: ${levels[currentLevelIndex].levelNumber}',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
+                  Text('Pontuação: $score',
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 16)),
+                  Text('Recorde: $highScore',
+                      style:
+                          const TextStyle(color: Colors.yellow, fontSize: 14)),
+                  Text('Nível: ${levels[currentLevelIndex].levelNumber}',
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 16)),
                 ],
               ),
             ),
@@ -330,16 +441,35 @@ class _GameScreenState extends State<GameScreen> {
                   final isSnake = snake.contains(position);
                   final isFood = foods.contains(position);
                   final isObstacle = obstacles.contains(position);
+                  final PowerUp? powerUp =
+                      powerUps.firstWhereOrNull((p) => p.position == position);
+                  Color cellColor = Colors.grey[800]!;
+                  if (isSnake) {
+                    cellColor = Colors.green;
+                  } else if (isFood) {
+                    cellColor = Colors.red;
+                  } else if (isObstacle) {
+                    cellColor = Colors.grey;
+                  } else if (powerUp != null) {
+                    switch (powerUp.type) {
+                      case PowerUpType.aceleracao:
+                        cellColor = Colors.purple;
+                        break;
+                      case PowerUpType.desaceleracao:
+                        cellColor = Colors.blue;
+                        break;
+                      case PowerUpType.pontuacaoExtra:
+                        cellColor = Colors.orange;
+                        break;
+                      case PowerUpType.tamanhoReduzido:
+                        cellColor = Colors.teal;
+                        break;
+                    }
+                  }
                   return Container(
                     margin: const EdgeInsets.all(1),
                     decoration: BoxDecoration(
-                      color: isSnake
-                          ? Colors.green
-                          : isFood
-                              ? Colors.red
-                              : isObstacle
-                                  ? Colors.grey
-                                  : Colors.grey[800],
+                      color: cellColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   );
